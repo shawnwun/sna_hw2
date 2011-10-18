@@ -20,7 +20,7 @@ MAX_PER_NODE = 5;
 def main(argv=None):
 
     if len(sys.argv) < 4:
-        print "ERROR!! Usage: python sir_model.py cleanGraphPath infectedPath outputFilePath -b";
+        print "ERROR!! Usage: python sir_model_p2.py cleanGraphPath infectedPath outputFilePath -b";
         exit();
     
     inputFile = sys.argv[1];
