@@ -1,4 +1,5 @@
 import sys;
+import os;
 import networkx as nx;
 import random;
 from networkx import *;
@@ -7,22 +8,30 @@ from networkx import *;
 #1 = infected
 #2 = recovered
 
+MODEL_NAME = "SIR";
+#OUTPUT_DIR = "../part_a";
+
 BIRTH = 0.5;
 DEATH = 0.5;
 
 def main(argv=None):
 
-    if len(sys.argv) < 3:
-        print "ERROR!! Usage: python sir_model.py cleanGraphPath infectedPath";
+    if len(sys.argv) < 4:
+        print "ERROR!! Usage: python sir_model.py cleanGraphPath infectedPath outputFilePath";
         exit();
     
     inputFile = sys.argv[1];
     infectFile = sys.argv[2];
+    outFileName = sys.argv[3];
+
+    allInfected = [];
+    
 
     sirGraph = readGraph(inputFile);
     [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
 
-   
+    allInfected.extend(infected);
+    
     iCount = 0;
 
     while (True):
@@ -76,10 +85,26 @@ def main(argv=None):
         print "Iter: %d, new infect: %d, new recover: %d, s: %d, i: %d, r:%d" %(iCount, len(newInfect), len(newRecover), s, i, r);
         iCount+=1;
 
-
+        for n in infected:
+            if not (n in allInfected):
+                allInfected.append(n);
+        
         if (i == 0):
             break;
 
+    #if not os.path.exists(OUTPUT_DIR):
+    #    os.makedirs(OUTPUT_DIR);
+
+    outputFile = outFileName;
+    #OUTPUT_DIR + "/" + MODEL_NAME + "_" + outFileName;
+
+    outputFh = open(outputFile, 'w');
+
+    for n in allInfected:
+        outputFh.write(n + "\n");
+
+    outputFh.close();
+    
 
 def addInfectNodes(infectFilePath, g):
     inputFh = open(infectFilePath, 'r');
