@@ -59,19 +59,13 @@ def main(argv=None):
 			    rand = random.randrange(0,DICE)
 			    attr['date'] = rand+1
                             newInfect.append(n);
-
+			    lltGraph.add_node(n,status=1,date=rand+1)
 
             #try to recover
-	    lltGraph[infectN][date] -= 1
-	    if lltGraph[infectN][date]==0:
-                newRecover.append(infectN);
-
-        #update status in graph
-        for n in newInfect:
-            lltGraph.add_node(n, status=1);
-
-        for n in newRecover:
-            lltGraph.add_node(n, status=2);
+	    lltGraph.node[infectN]['date'] -= 1
+	    if lltGraph.node[infectN]['date']==0:
+		newRecover.append(infectN)
+		lltGraph.add_node(infectN, status=2, date=0);
 
         #update infected list
         infected = [];
@@ -83,6 +77,7 @@ def main(argv=None):
                 infected.append(n);
             if (attr['status'] == 2):
                 r+=1;
+
         #print lltGraph.nodes(True);
         print "Iter: %d, new infect: %d, new recover: %d, s: %d, i: %d, r:%d" %(iCount, len(newInfect), len(newRecover), s, i, r);
         iCount+=1;
@@ -116,7 +111,7 @@ def addInfectNodes(infectFilePath, g):
         infectedNode = line.replace("\n", "");
 
         if infectedNode in g:
-	    rand = random.randrange(0,6)
+	    rand = random.randrange(0,DICE)
             g.add_node(infectedNode, status = 1, date = rand+1);
             infected.append(infectedNode);
             #g[infectedNode]['status'] = 1;
@@ -138,8 +133,8 @@ def readGraph(filePath):
             node1 = splitLine[0];
             node2 = splitLine[2];
             
-            diGraph.add_node(node1, {'status':0,'date':0}, None );
-            diGraph.add_node(node2, {'status':0,'date':0}, None );
+            diGraph.add_node(node1, status=0, date=0 );
+            diGraph.add_node(node2, status=0, date=0 );
             diGraph.add_edge(node1, node2);
 
     inputFh.close();
