@@ -1,0 +1,8 @@
+Part a data generation
+	python sir_model_p1.py cleanGraphPath infectedPath outputFilePath
+	
+Part b data generation
+	python sir_model_p2_method_1.py cleanGraphPath infectedPath outputFilePath runsToAve
+	python sir_model_p2_method_2.py cleanGraphPath infectedPath outputFilePath (max or depth #) runsToAve
+	python sir_model_p2_method_3.py cleanGraphPath infectedPath outputFilePath
+	python sir_model_p2_method_4.py cleanGraphPath infectedPath outputFilePath alpha runsToAve

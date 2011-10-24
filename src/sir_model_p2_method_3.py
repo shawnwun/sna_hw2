@@ -6,7 +6,7 @@ import math;
 from networkx import *;
 
 '''
-    Generate block list base on node's fan in and fan out. Block those with high fanOut/fanIn. Incremental update.
+    Generate block list base on node's fan in. Block those with the maximum fan in. Incremental update
 '''
 
 #0 = susceptible
@@ -19,27 +19,25 @@ MODEL_NAME = "SIR";
 BIRTH = 0.5;
 DEATH = 0.5;
 
+DEPTH = 2;
+
 def main(argv=None):
 
-    if len(sys.argv) < 5:
-        print "ERROR!! Usage: python sir_model_p2_v8.py cleanGraphPath infectedPath outputFilePath alpha runsToAve";
+    if len(sys.argv) < 4:
+        print "ERROR!! Usage: python sir_model_p2_method_3.py cleanGraphPath infectedPath outputFilePath";
         exit();
 
     inputFile = sys.argv[1];
     infectFile = sys.argv[2];
-    outFileName = sys.argv[3];
-    alpha = float(sys.argv[4]);
+    outFileName = sys.argv[3];    
 
     sirGraph = readGraph(inputFile);
     [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
-    [fanInDict, fanOutDict] = getTransDict(sirGraph, infected, alpha);
+    nodeToFanIn = getNodeToFanInDict(sirGraph, infected);
 
-    print alpha;
-
-    #print transDict;
     
-    if len(sys.argv) == 6:
-        runsToAve = int(sys.argv[5]);
+    if len(sys.argv) == 5:
+        runsToAve = int(sys.argv[4]);
     else:
         runsToAve = 1;
 
@@ -47,16 +45,15 @@ def main(argv=None):
         g = sirGraph.copy();
         inf = list(infected);
         blockPerc = float(i/100.0);
-        fanInCpy = fanInDict.copy();
-        fanOutCpy = fanOutDict.copy();
 
         infSum = 0;
         for j in range (0, runsToAve):
             g = sirGraph.copy();
             inf = list(infected);
+            fanInDict = nodeToFanIn.copy();
 
             if (block):
-                [g, blockList] = addBlockNodes(g, fanInCpy, fanOutCpy, blockPerc, alpha);
+                [g, blockList] = addBlockNodes(g, fanInDict, blockPerc);
             
             print "%.2f, %d, immune wanted: %d, count: %d" % (blockPerc, j, math.floor(g.number_of_nodes() * blockPerc), len(blockList));
             allInfected = runSim(g, infected);
@@ -142,63 +139,45 @@ def runSim(sirGraph, infected):
 
     return allInfected;
 
-def getMaxKey(fanInDict, fanOutDict, alpha):
+def getMaxKey(nodeToFanInDict):
     maxKey = -1;
     maxList = [];
 
-    for node in fanInDict:
-        pre = fanInDict[node];
-        suc = fanOutDict[node];
+    for node in nodeToFanInDict:
+        preList = nodeToFanInDict[node];
 
-        countPre = len(pre);
-        countSuc = len(suc);
-
-        score = countPre * alpha + (1-alpha) * countSuc;
-
-        if score > maxKey:
+        if len(preList) > maxKey:
             maxList = [];
             maxList.append(node);
-            maxKey = score;
-        elif score == maxKey:
+            maxKey = len(preList);
+        elif len(preList) == maxKey:
             maxList.append(node);
 
     return [maxKey, maxList];
 
-def updateDict(fanInDict, fanOutDict, blockNode):
+def updateDict(nodeToFanInDict, blockNode):
 
-    del fanInDict[blockNode];
-    del fanOutDict[blockNode];
+    del nodeToFanInDict[blockNode];
         
-    for node in fanInDict:
-        preList = fanInDict[node];
+    for node in nodeToFanInDict:
+        preList = nodeToFanInDict[node];
 
         if blockNode in preList:
             preList.remove(blockNode);
-            fanInDict[node] = preList;
-            print "rm %d from %d" % (int(blockNode), int(node));
+            nodeToFanInDict[node] = preList;
+            #print "remove %d from %d" % (int(blockNode), int(node));
 
-    for node in fanOutDict:
-        sucList = fanOutDict[node];
+    return nodeToFanInDict;
 
-        if blockNode in sucList:
-            sucList.remove(blockNode);
-            fanOutDict[node] = sucList;
-            print "rm %d from %d" % (int(blockNode), int(node));
-
-    return [fanInDict, fanOutDict];
-
-def addBlockNodes(g, fanInDict, fanOutDict, blockPercent, alpha):
+def addBlockNodes(g, fanInDict, blockPercent):
     blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
     
-    blockList = [];        
-    
+    blockList = [];            
+            
     while len(blockList) < blockCount:                
-        [maxScore, maxList] = getMaxKey(fanInDict, fanOutDict, alpha);
-
-        print maxScore;
-        print maxList;
+        [maxFanIn, maxList] = getMaxKey(fanInDict);
                 
-        if maxScore < 0:
+        if maxFanIn < 0:
             break;
 
         rand = random.randint(0, len(maxList)-1);
@@ -208,7 +187,7 @@ def addBlockNodes(g, fanInDict, fanOutDict, blockPercent, alpha):
         blockList.append(blockNode);
         g.add_node(blockNode, status=3);
 
-        [fanInDict, fanOutDict] = updateDict(fanInDict, fanOutDict, blockNode);
+        fanInDict = updateDict(fanInDict, blockNode);
 
         if len(blockList) >= blockCount:
             break;
@@ -216,16 +195,15 @@ def addBlockNodes(g, fanInDict, fanOutDict, blockPercent, alpha):
             
     return [g, blockList];
 
-def getTransDict(g, infectedList, alpha):
-    
-    fanInDict = {};
-    fanOutDict = {};
+def getNodeToFanInDict(g, infectedList):
+
+    nodeToFanIn = {};
+
     for node in g.nodes_iter():
         if node in infectedList:
             continue;
-        
+
         predecessors = g.predecessors(node);
-        successors = g.successors(node);
 
         cleanPreList = [];
         for pre in predecessors:
@@ -234,20 +212,11 @@ def getTransDict(g, infectedList, alpha):
 
             cleanPreList.append(pre);
 
-        cleanSucList = [];
-        for suc in successors:
-            if suc in infectedList:
-                continue;
 
-            cleanSucList.append(suc);
-
+        nodeToFanIn[node] = cleanPreList;
     
-        
-
-        fanInDict[node] = cleanPreList;
-        fanOutDict[node] = cleanSucList;
-
-    return [fanInDict, fanOutDict];
+    
+    return nodeToFanIn;
 
 def getDegreeList(g):
     degToNode = {};

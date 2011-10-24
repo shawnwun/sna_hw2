@@ -5,6 +5,11 @@ import random;
 import math;
 from networkx import *;
 
+'''
+    Generate block node list based on node's span, the total number of nodes it can reach using DFS. Incremental update
+'''
+
+
 #0 = susceptible
 #1 = infected
 #2 = recovered
@@ -15,45 +20,55 @@ MODEL_NAME = "SIR";
 BIRTH = 0.5;
 DEATH = 0.5;
 
-MAX_PER_NODE = 5;
+DEPTH = sys.maxint;
 
 def main(argv=None):
 
-    if len(sys.argv) < 4:
-        print "ERROR!! Usage: python sir_model_p2.py cleanGraphPath infectedPath outputFilePath -b";
+    if len(sys.argv) < 5:
+        print "ERROR!! Usage: python sir_model_p2_method_2.py cleanGraphPath infectedPath outputFilePath (max or depth #) runsToAve";
         exit();
-    
+
     inputFile = sys.argv[1];
     infectFile = sys.argv[2];
     outFileName = sys.argv[3];
 
-    block = False;
+    dep = sys.argv[4];
 
-    if len(sys.argv) == 5:
-        if sys.argv[4] == "-b":
-            block = True;
+    if (dep == "max"):
+        DEPTH = sys.maxint;
+    else:
+        DEPTH = int(dep);
+
+    if len(sys.argv) == 6:
+        runsToAve = int(sys.argv[5]);
+    else:
+        runsToAve = 1;
+
+    print "Depth: %d" % DEPTH;
 
     sirGraph = readGraph(inputFile);
     [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
+    spanDict = getSpanDict(sirGraph, infected);
 
-    for i in range(1, 6):
+    for i in range(0, 6):
         g = sirGraph.copy();
         inf = list(infected);
         blockPerc = float(i/100.0);
 
         infSum = 0;
-        for j in range (0, 1):
+        for j in range (0, runsToAve):
             g = sirGraph.copy();
             inf = list(infected);
+            nodeToSpanDict = spanDict.copy();
 
-            if (block):
-                [g, blockList] = addBlockNodes(g, inf, blockPerc);
+    
+            [g, blockList] = addBlockNodes(g, nodeToSpanDict, blockPerc);
             
-            print "%.2f, %d" % (blockPerc, j);
+            print "%.2f, %d, immune wanted: %d, count: %d" % (blockPerc, j, math.floor(g.number_of_nodes() * blockPerc), len(blockList));
             allInfected = runSim(g, infected);
             infSum += len(allInfected);
         
-        print "%.2f: %.2f" % (blockPerc, infSum/(1* float(g.number_of_nodes())));
+        print "%.2f: %.2f" % (blockPerc, infSum/(runsToAve* float(g.number_of_nodes())));
     
         outputFile =  outFileName + "_" + str(blockPerc) + ".txt";
         
@@ -133,92 +148,116 @@ def runSim(sirGraph, infected):
 
     return allInfected;
     
+def getMaxSpan(nodeToPathDict):
+    maxSpan = -1;
+    maxSpanNodeList = [];
 
+    for node in nodeToPathDict:
+        paths = nodeToPathDict[node];
 
-def addBlockNodes(g, infectedList, blockPercent):
-    #degToNode = getDegreeList(g);
-
-    degToNode = {};
-    for n in infectedList:
-        deg = g.out_degree(n);
-        if deg in degToNode:
-            nodeList = degToNode[deg];
-            nodeList.append(n);
-            degToNode[deg] = nodeList;
-        else:
-            nodeList = [];
-            nodeList.append(n);
-            degToNode[deg] = nodeList;
-
-    blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
-    #blockCount = 1;
-    
-    blockList = [];
-    #print infectedList;
-    #print degToNode;
-    
-    while len(blockList) < blockCount:        
-
-
-        #print "";
-        #print "--------Max deg: %d" % maxDeg;
-        #print "block list:";
-        #print blockList;
-                
-        #print "infect list for degree";
-        #print nodeList;
-        neighborList = [];
+        allNodeList = [];
         
-        for infectNode in infectedList:
-            neighbors = g.neighbors(infectNode);
+        for key in paths:
+            path = paths[key];
+            for pathNode in path:
+                if not (pathNode in allNodeList):
+                    allNodeList.append(pathNode);
 
-            for ne in neighbors:
-                if not (ne in neighborList) and not (ne in infectedList):
-                    neighborList.append(ne);
+        if len(allNodeList) > maxSpan:
+            maxSpanNodeList = [];
+            maxSpanNodeList.append(node);
+            maxSpan = len(allNodeList);
+        elif len(allNodeList) == maxSpan:
+            maxSpanNodeList.append(node);
 
-            #print "neighbor list:";
-            #print neighborList;
-        neiDegToNode = {};
+    return [maxSpan, maxSpanNodeList];
 
-        for ne in neighborList:
-            deg = g.out_degree(ne);
-            if deg in neiDegToNode:
-                nodeList = neiDegToNode[deg];
-                nodeList.append(ne);
-                neiDegToNode[deg] = nodeList;
-            else:
-                nodeList = [];
-                nodeList.append(ne);
-                neiDegToNode[deg] = nodeList;
-        #print neiDegToNode;
-        neiDegKeys = neiDegToNode.keys();
-        neiDegKeys.sort();
+def updatePathDict(nodeToPathDict, blockNode):
 
-        blockedForNode = 0;
+    del nodeToPathDict[blockNode];
 
-        while (len(neiDegKeys) > 0):
-            if blockedForNode >= MAX_PER_NODE:
-                break;
+    #print "remove %d" % int(blockNode);
+    
+    for node in nodeToPathDict:
+        paths = nodeToPathDict[node];
+
+        for key in paths:
+            path = paths[key];
+
+            if blockNode in path:
+                cleanPathList = [];
+                for pathNode in path:
+                    if pathNode == blockNode:
+                        break;
+
+                    cleanPathList.append(pathNode);
+
+                if len(cleanPathList) == 0:
+                    paths.remove(key);
+                else:
+                    paths[key] = cleanPathList;
                 
-            maxNeiDeg = neiDegKeys.pop();
-            neiList = neiDegToNode[maxNeiDeg];
+        nodeToPathDict[node] = paths;
 
-                #print "Infected Node: %s" % infectNode;
-                #print neiList;
-            for ne in neiList:
-                if not (ne in blockList):
-                    #print "Block neighbor: %s" % ne;
-                    blockList.append(ne);
-                    g.add_node(ne, status=3);
-                    blockedForNode+=1;
+    return nodeToPathDict;
 
-                    if len(blockList) >= blockCount:
-                        #print "Max Deg: %d" % maxDeg;
-                        return [g, blockList];
+def addBlockNodes(g, nodeToPathDict, blockPercent):
+    blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
+    
+    blockList = [];            
+        
+    while len(blockList) < blockCount:                
+        [maxSpan, maxSpanNodeList] = getMaxSpan(nodeToPathDict);
+
+        if (maxSpan < 0):
+            break;
+                
+        rand = random.randint(0, len(maxSpanNodeList)-1);
+
+        blockNode = maxSpanNodeList[rand];
+
+        blockList.append(blockNode);
+        g.add_node(blockNode, status=3);
+
+        nodeToPathDict = updatePathDict(nodeToPathDict, blockNode);
+
+        if len(blockList) >= blockCount:
+            break;
 
             
     return [g, blockList];
 
+def getSpanDict(g, infectedList):
+    nodeToSpanDict = {}
+
+    for node in g.nodes_iter():
+
+        if node in infectedList:
+            continue;
+        
+        paths = shortest_path(g, node);            
+        
+        for key in paths.iterkeys():            
+            pathList = paths[key];
+            cleanPathList = [];
+            currLevel = 0;
+
+            for pathNode in pathList:
+                if currLevel >= DEPTH:
+                    break;
+                    
+                #if any node in the path is already infected, break
+                if (pathNode in infectedList):
+                    break;
+                    
+                cleanPathList.append(pathNode);
+
+                currLevel+=1;
+            paths[key] = cleanPathList;
+
+        nodeToSpanDict[node] = paths;
+
+    return nodeToSpanDict;
 
 def getDegreeList(g):
     degToNode = {};
