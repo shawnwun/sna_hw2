@@ -8,16 +8,16 @@ from networkx import *;
 #1 = infected
 #2 = recovered
 
-MODEL_NAME = "SIR";
+MODEL_NAME = "LLT";
 #OUTPUT_DIR = "../part_a";
 
 BIRTH = 0.5;
-DEATH = 0.5;
+DICE = 6;
 
 def main(argv=None):
 
     if len(sys.argv) < 4:
-        print "ERROR!! Usage: python sir_model_p1.py cleanGraphPath infectedPath outputFilePath";
+        print "ERROR!! Usage: python limit_LT_model_p1.py cleanGraphPath infectedPath outputFilePath";
         exit();
     
     inputFile = sys.argv[1];
@@ -27,8 +27,8 @@ def main(argv=None):
     allInfected = [];
     
 
-    sirGraph = readGraph(inputFile);
-    [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
+    lltGraph = readGraph(inputFile);
+    [lltGraph, infected] = addInfectNodes(infectFile, lltGraph);
 
     allInfected.extend(infected);
     
@@ -45,9 +45,9 @@ def main(argv=None):
         #finding next infected nodes
         for infectN in infected:
             #find the neighbors of infected nodes
-            neighborList = sirGraph.neighbors(infectN);
+            neighborList = lltGraph.neighbors(infectN);
             
-            for n, attr in sirGraph.nodes_iter(True):
+            for n, attr in lltGraph.nodes_iter(True):
                 if n in neighborList:
                     st = attr['status'];
 
@@ -56,24 +56,20 @@ def main(argv=None):
                         rand = random.random();
                 
                         if (rand < BIRTH):
+			    rand = random.randrange(0,DICE)
+			    attr['date'] = rand+1
                             newInfect.append(n);
-
+			    lltGraph.add_node(n,status=1,date=rand+1)
 
             #try to recover
-            rand = random.random();
-            if (rand < DEATH):
-                newRecover.append(infectN);
-
-        #update status in graph
-        for n in newInfect:
-            sirGraph.add_node(n, status=1);
-
-        for n in newRecover:
-            sirGraph.add_node(n, status=2);
+	    lltGraph.node[infectN]['date'] -= 1
+	    if lltGraph.node[infectN]['date']==0:
+		newRecover.append(infectN)
+		lltGraph.add_node(infectN, status=2, date=0);
 
         #update infected list
         infected = [];
-        for n, attr in sirGraph.nodes_iter(True):
+        for n, attr in lltGraph.nodes_iter(True):
             if (attr['status'] == 0):
                 s+=1;
             if (attr['status'] == 1):
@@ -81,7 +77,8 @@ def main(argv=None):
                 infected.append(n);
             if (attr['status'] == 2):
                 r+=1;
-        #print sirGraph.nodes(True);
+
+        #print lltGraph.nodes(True);
         print "Iter: %d, new infect: %d, new recover: %d, s: %d, i: %d, r:%d" %(iCount, len(newInfect), len(newRecover), s, i, r);
         iCount+=1;
 
@@ -114,7 +111,8 @@ def addInfectNodes(infectFilePath, g):
         infectedNode = line.replace("\n", "");
 
         if infectedNode in g:
-            g.add_node(infectedNode, status = 1);
+	    rand = random.randrange(0,DICE)
+            g.add_node(infectedNode, status = 1, date = rand+1);
             infected.append(infectedNode);
             #g[infectedNode]['status'] = 1;
         
@@ -134,9 +132,9 @@ def readGraph(filePath):
         if (len(splitLine) == 3):
             node1 = splitLine[0];
             node2 = splitLine[2];
- 
-            diGraph.add_node(node1, status = 0);
-            diGraph.add_node(node2, status = 0);
+            
+            diGraph.add_node(node1, status=0, date=0 );
+            diGraph.add_node(node2, status=0, date=0 );
             diGraph.add_edge(node1, node2);
 
     inputFh.close();
