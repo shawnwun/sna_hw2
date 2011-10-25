@@ -5,6 +5,11 @@ import random;
 import math;
 from networkx import *;
 import operator
+
+'''
+    Generate block list base on node's fan in and fan out. Block those with high fanOut/fanIn. Incremental update.
+'''
+
 #0 = susceptible
 #1 = infected
 #2 = recovered
@@ -15,49 +20,55 @@ MODEL_NAME = "SIR";
 BIRTH = 0.5;
 DEATH = 0.5;
 
-MAX_PER_NODE = 5;
-
 def main(argv=None):
 
-    if len(sys.argv) < 4:
-        print "ERROR!! Usage: python sir_model_p2.py cleanGraphPath infectedPath outputFilePath -b";
+    if len(sys.argv) < 5:
+        print "ERROR!! Usage: python sir_model_p2_method_4.py cleanGraphPath infectedPath outputFilePath alpha runsToAve";
         exit();
-    
+
     inputFile = sys.argv[1];
     infectFile = sys.argv[2];
     outFileName = sys.argv[3];
-
-    block = False;
-
-    if len(sys.argv) == 5:
-        if sys.argv[4] == "-b":
-            block = True;
+    alpha = float(sys.argv[4]);
 
     sirGraph = readGraph(inputFile);
     [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
+    [fanInDict, fanOutDict] = getTransDict(sirGraph, infected, alpha);
 
     #randomWalkClustering(sirGraph)
 
-    for i in range(1, 6):
+
+    #print transDict;
+    
+    if len(sys.argv) == 6:
+        runsToAve = int(sys.argv[5]);
+    else:
+        runsToAve = 1;
+
+    for i in range(0, 6):
         g = sirGraph.copy();
         inf = list(infected);
         blockPerc = float(i/100.0);
+        fanInCpy = fanInDict.copy();
+        fanOutCpy = fanOutDict.copy();
 
         infSum = 0;
-        for j in range (0, 1):
+        for j in range (0, runsToAve):
             g = sirGraph.copy();
             inf = list(infected);
 
             if (block):
-		[g, blockList] = randomWalkBlocking(g, inf, blockPerc)
+		#[g, blockList] = randomWalkBlocking(g, inf, blockPerc)
                 #print blockList
 		#[g, blockList] = addBlockNodes(g, inf, blockPerc);
 		#print blockList
-            print "%.2f, %d" % (blockPerc, j);
+                [g, blockList] = addBlockNodes(g, fanInCpy, fanOutCpy, blockPerc, alpha);
+            
+            print "%.2f, %d, immune wanted: %d, count: %d" % (blockPerc, j, math.floor(g.number_of_nodes() * blockPerc), len(blockList));
             allInfected = runSim(g, infected);
             infSum += len(allInfected);
         
-        print "%.2f: %.2f" % (blockPerc, infSum/(1* float(g.number_of_nodes())));
+        print "%.2f: %.2f" % (blockPerc, infSum/(runsToAve* float(g.number_of_nodes())));
     
         outputFile =  outFileName + "_" + str(blockPerc) + ".txt";
         
@@ -262,91 +273,112 @@ def randomWalkClustering(g):
     for i in range(len(subgraphs)):
 	print len(subgraphs[i])
 
+def getMaxKey(fanInDict, fanOutDict, alpha):
+    maxKey = -1;
+    maxList = [];
 
-def addBlockNodes(g, infectedList, blockPercent):
-    #degToNode = getDegreeList(g);
+    for node in fanInDict:
+        pre = fanInDict[node];
+        suc = fanOutDict[node];
 
-    degToNode = {};
-    for n in infectedList:
-        deg = g.out_degree(n);
-        if deg in degToNode:
-            nodeList = degToNode[deg];
-            nodeList.append(n);
-            degToNode[deg] = nodeList;
-        else:
-            nodeList = [];
-            nodeList.append(n);
-            degToNode[deg] = nodeList;
+        countPre = len(pre);
+        countSuc = len(suc);
 
-    blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
-    #blockCount = 1;
-    
-    blockList = [];
-    #print infectedList;
-    #print degToNode;
-    
-    while len(blockList) < blockCount:        
+        score = countPre * alpha + (1-alpha) * countSuc;
 
+        if score > maxKey:
+            maxList = [];
+            maxList.append(node);
+            maxKey = score;
+        elif score == maxKey:
+            maxList.append(node);
 
-        #print "";
-        #print "--------Max deg: %d" % maxDeg;
-        #print "block list:";
-        #print blockList;
-                
-        #print "infect list for degree";
-        #print nodeList;
-        neighborList = [];
+    return [maxKey, maxList];
+
+def updateDict(fanInDict, fanOutDict, blockNode):
+
+    del fanInDict[blockNode];
+    del fanOutDict[blockNode];
         
-        for infectNode in infectedList:
-            neighbors = g.neighbors(infectNode);
+    for node in fanInDict:
+        preList = fanInDict[node];
 
-            for ne in neighbors:
-                if not (ne in neighborList) and not (ne in infectedList):
-                    neighborList.append(ne);
+        if blockNode in preList:
+            preList.remove(blockNode);
+            fanInDict[node] = preList;
+            print "rm %d from %d" % (int(blockNode), int(node));
 
-            #print "neighbor list:";
-            #print neighborList;
-        neiDegToNode = {};
+    for node in fanOutDict:
+        sucList = fanOutDict[node];
 
-        for ne in neighborList:
-            deg = g.out_degree(ne);
-            if deg in neiDegToNode:
-                nodeList = neiDegToNode[deg];
-                nodeList.append(ne);
-                neiDegToNode[deg] = nodeList;
-            else:
-                nodeList = [];
-                nodeList.append(ne);
-                neiDegToNode[deg] = nodeList;
-        #print neiDegToNode;
-        neiDegKeys = neiDegToNode.keys();
-        neiDegKeys.sort();
+        if blockNode in sucList:
+            sucList.remove(blockNode);
+            fanOutDict[node] = sucList;
+            print "rm %d from %d" % (int(blockNode), int(node));
 
-        blockedForNode = 0;
+    return [fanInDict, fanOutDict];
 
-        while (len(neiDegKeys) > 0):
-            if blockedForNode >= MAX_PER_NODE:
-                break;
+def addBlockNodes(g, fanInDict, fanOutDict, blockPercent, alpha):
+    blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
+    
+    blockList = [];        
+    
+    while len(blockList) < blockCount:                
+        [maxScore, maxList] = getMaxKey(fanInDict, fanOutDict, alpha);
+
+        print maxScore;
+        print maxList;
                 
-            maxNeiDeg = neiDegKeys.pop();
-            neiList = neiDegToNode[maxNeiDeg];
+        if maxScore < 0:
+            break;
 
-                #print "Infected Node: %s" % infectNode;
-                #print neiList;
-            for ne in neiList:
-                if not (ne in blockList):
-                    #print "Block neighbor: %s" % ne;
-                    blockList.append(ne);
-                    g.add_node(ne, status=3);
-                    blockedForNode+=1;
+        rand = random.randint(0, len(maxList)-1);
 
-                    if len(blockList) >= blockCount:
-                        #print "Max Deg: %d" % maxDeg;
-                        return [g, blockList];
+        blockNode = maxList[rand];
+
+        blockList.append(blockNode);
+        g.add_node(blockNode, status=3);
+
+        [fanInDict, fanOutDict] = updateDict(fanInDict, fanOutDict, blockNode);
+
+        if len(blockList) >= blockCount:
+            break;
 
             
     return [g, blockList];
 
+def getTransDict(g, infectedList, alpha):
+    
+    fanInDict = {};
+    fanOutDict = {};
+    for node in g.nodes_iter():
+        if node in infectedList:
+            continue;
+        
+        predecessors = g.predecessors(node);
+        successors = g.successors(node);
+
+        cleanPreList = [];
+        for pre in predecessors:
+            if pre in infectedList:
+                continue;
+
+            cleanPreList.append(pre);
+
+        cleanSucList = [];
+        for suc in successors:
+            if suc in infectedList:
+                continue;
+
+            cleanSucList.append(suc);
+
+    
+        
+
+        fanInDict[node] = cleanPreList;
+        fanOutDict[node] = cleanSucList;
+
+    return [fanInDict, fanOutDict];
 
 def getDegreeList(g):
     degToNode = {};
