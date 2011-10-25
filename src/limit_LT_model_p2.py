@@ -10,17 +10,17 @@ import operator
 #2 = recovered
 #3 = immuned
 
-MODEL_NAME = "SIR";
+MODEL_NAME = "LLT"
 
-BIRTH = 0.5;
-DEATH = 0.5;
+BIRTH = 0.5
+DICE = 6
 
-MAX_PER_NODE = 5;
+MAX_PER_NODE = 5
 
 def main(argv=None):
 
     if len(sys.argv) < 4:
-        print "ERROR!! Usage: python sir_model_p2.py cleanGraphPath infectedPath outputFilePath -b";
+        print "ERROR!! Usage: python llt_model_p2.py cleanGraphPath infectedPath outputFilePath -b";
         exit();
     
     inputFile = sys.argv[1];
@@ -33,26 +33,23 @@ def main(argv=None):
         if sys.argv[4] == "-b":
             block = True;
 
-    sirGraph = readGraph(inputFile);
-    [sirGraph, infected] = addInfectNodes(infectFile, sirGraph);
-
-    #randomWalkClustering(sirGraph)
+    lltGraph = readGraph(inputFile);
+    [lltGraph, infected] = addInfectNodes(infectFile, lltGraph);
 
     for i in range(1, 6):
-        g = sirGraph.copy();
+        g = lltGraph.copy();
         inf = list(infected);
         blockPerc = float(i/100.0);
 
         infSum = 0;
         for j in range (0, 1):
-            g = sirGraph.copy();
+            g = lltGraph.copy();
             inf = list(infected);
 
             if (block):
-		[g, blockList] = randomWalkBlocking(g, inf, blockPerc)
-                #print blockList
-		#[g, blockList] = addBlockNodes(g, inf, blockPerc);
-		#print blockList
+		#[g, blockList] = randomWalkBlocking(g, inf, blockPerc)
+                [g, blockList] = addBlockNodes(g, inf, blockPerc);
+            
             print "%.2f, %d" % (blockPerc, j);
             allInfected = runSim(g, infected);
             infSum += len(allInfected);
@@ -62,7 +59,7 @@ def main(argv=None):
         outputFile =  outFileName + "_" + str(blockPerc) + ".txt";
         
         outputFh = open(outputFile, 'w');
-	
+
 	if block:
 	    for n in blockList:
 		outputFh.write(n + "\n");
@@ -70,7 +67,7 @@ def main(argv=None):
         outputFh.close();
     
 
-def runSim(sirGraph, infected):    
+def runSim(lltGraph, infected):    
     allInfected = [];    
 
     allInfected.extend(infected);
@@ -85,12 +82,12 @@ def runSim(sirGraph, infected):
         i = 0;
         r = 0;
 
-        #finding next infected nodes
+	#finding next infected nodes
         for infectN in infected:
             #find the neighbors of infected nodes
-            neighborList = sirGraph.neighbors(infectN);            
+            neighborList = lltGraph.neighbors(infectN);
             
-            for n, attr in sirGraph.nodes_iter(True):
+            for n, attr in lltGraph.nodes_iter(True):
                 if n in neighborList:
                     st = attr['status'];
 
@@ -99,32 +96,29 @@ def runSim(sirGraph, infected):
                         rand = random.random();
                 
                         if (rand < BIRTH):
+			    rand = random.randrange(0,DICE)
+			    attr['date'] = rand+1
                             newInfect.append(n);
-
+			    lltGraph.add_node(n,status=1,date=rand+1)
 
             #try to recover
-            rand = random.random();
-            if (rand < DEATH):                            
-                newRecover.append(infectN);
-
-        #update status in graph
-        for n in newInfect:
-            sirGraph.add_node(n, status=1);
-
-        for n in newRecover:
-            sirGraph.add_node(n, status=2);
+	    lltGraph.node[infectN]['date'] -= 1
+	    if lltGraph.node[infectN]['date']==0:
+		newRecover.append(infectN)
+		lltGraph.add_node(infectN, status=2, date=0);
 
         #update infected list
         infected = [];
-        for n, attr in sirGraph.nodes_iter(True):            
+        for n, attr in lltGraph.nodes_iter(True):
             if (attr['status'] == 0):
-                s+=1;                
+                s+=1;
             if (attr['status'] == 1):
                 i+=1;
                 infected.append(n);
             if (attr['status'] == 2):
                 r+=1;
-        #print sirGraph.nodes(True);
+
+        #print lltGraph.nodes(True);
         print "Iter: %d, new infect: %d, new recover: %d, s: %d, i: %d, r:%d" %(iCount, len(newInfect), len(newRecover), s, i, r);
         iCount+=1;
 
@@ -136,15 +130,17 @@ def runSim(sirGraph, infected):
             break;
 
 
+
     return allInfected;
-   
+
+
 def fact(n):
     r = 1
     while(n>1):
 	r = r * n
 	n -= 1
     return r
- 
+
 def randomWalkBlocking(g, infectedList, blockPercent):
     
     blockCount = int (math.floor(g.number_of_nodes() * blockPercent));
@@ -182,7 +178,7 @@ def randomWalkBlocking(g, infectedList, blockPercent):
 	infectProb[n] = 1.0
 
     # start random walk
-    for iteration in range(125):
+    for iteration in range(175):
 	# random diffusion
 	#print iteration
 	if iteration==0:
@@ -228,39 +224,7 @@ def randomWalkBlocking(g, infectedList, blockPercent):
     return [g,blockList]
 
 
-def randomWalkClustering(g):
-    degree = 0
-    for d in g.degree().itervalues():
-	degree += d
-    
-    score = {}
-    for n in g:
-	score[n] = g.degree(n)
 
-    subgraphs = []
-    sorted_score = sorted(score.iteritems(), key=operator.itemgetter(1), reverse=True)
-    for i in range(5):
-	subgraph = []
-	node = [ sorted_score[i][0] ]
-	subgraph.append(sorted_score[i][0])
-	sorted_score.remove(sorted_score[i])
-	print node[0], g.degree(node[0])
-	for n in node:
-	    neighbors = g.neighbors(n)
-	    #print n, g.degree(n)
-	    #print g.degree(neighbors)
-	    #print '---------------'
-	    for nei in neighbors:
-		item = (nei,score[nei])
-		#print item
-		if score[nei] >= 10 and item in sorted_score:
-		    subgraph.append(nei)
-		    node.append(nei)
-		    sorted_score.remove(item)
-	subgraphs.append(subgraph)
-
-    for i in range(len(subgraphs)):
-	print len(subgraphs[i])
 
 
 def addBlockNodes(g, infectedList, blockPercent):
@@ -369,8 +333,9 @@ def addInfectNodes(infectFilePath, g):
     for line in inputFh:
         infectedNode = line.replace("\n", "");
 
-        if infectedNode in g:            
-            g.add_node(infectedNode, status = 1);
+        if infectedNode in g:           
+	    rand = random.randrange(0,DICE) 
+            g.add_node(infectedNode, status = 1, date = rand+1);
             infected.append(infectedNode);
             #g[infectedNode]['status'] = 1;
         
@@ -390,10 +355,9 @@ def readGraph(filePath):
         if (len(splitLine) == 3):
             node1 = splitLine[0];
             node2 = splitLine[2];
-
-            
-            diGraph.add_node(node1, status = 0);
-            diGraph.add_node(node2, status = 0);
+        
+            diGraph.add_node(node1, status = 0, date=0);
+            diGraph.add_node(node2, status = 0, date=0);
             diGraph.add_edge(node1, node2);        
 
     inputFh.close();

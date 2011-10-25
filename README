@@ -1,0 +1,6 @@
+
+-b parameter at the end is the indication of activating blocking
+
+example run:
+
+python src/limit_LT_model_p2.py sn/ca-HepPh_clean.txt source/HepPh_reveal.txt part_b/LLT_ca-HepPh -b 
